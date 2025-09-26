@@ -1,0 +1,11 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "bioalgs"
+version = "0.1.0"
+description = "A small collection of algorithms for solving problems in bioinformatics and computational biology"
+readme = "README.md"
+requires-python = ">=3.7"
+dependencies = ["numpy"]
