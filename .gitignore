@@ -37,3 +37,6 @@ ENV/
 
 # Jupyter
 .ipynb_checkpoints/
+
+# custom
+.ignore.py

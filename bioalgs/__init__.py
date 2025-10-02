@@ -1,4 +1,5 @@
 """bioalgs - Bioinformatics algorithms toolkit"""
+from .bitseq import DNAString
 from typing import Iterator, Iterable
 
 try:
@@ -11,7 +12,8 @@ except ImportError:
 __all__ = [
     "kmergen", "pattern_count", "kmer_count_d", "most_frequent_words",
     "revcomp", "ss_idx", "find_clumps", "find_min_skew_poses", 
-    "gen_possible_kmers", "hamming_distance", "kmergen_by_pattern"
+    "gen_possible_kmers", "hamming_distance", "kmergen_by_pattern",
+    "DNAString"
 ]
 
 def kmergen(text: str, kmerlen: int) -> Iterator[str]:
