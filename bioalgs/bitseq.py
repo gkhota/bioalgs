@@ -1,15 +1,17 @@
 from __future__ import annotations
 from typing import Union, Iterator, overload, List, Set, Optional
-import re
+# import re
 
 class DNAString:
     code: dict[str, int] = {'A': 0, 'C': 1, 'G': 2, 'T': 3}
     inv: dict[int, str]  = {v: k for k, v in code.items()}
+    _valid_bases: set[str] = set(code.keys())
     alphalen: int        = len(code)
 
     def __init__(self, init_value: object, length: Optional[int] = None) -> None:
         if isinstance(init_value, str):
-            self._validate_dna_string(init_value)
+            if not self.is_valid_sequence(init_value):
+                raise ValueError(f"Only {','.join(self.code.keys())} allowed")
             self.text: str = init_value.upper()
             self.len: int = len(self.text)
             self.num: int = self._encode(self.text)
@@ -31,10 +33,10 @@ class DNAString:
         else:
             raise TypeError("Argument must be str or int")
 
-    @staticmethod
-    def _validate_dna_string(s: str) -> None:
-        if not re.fullmatch(r'[ACGT]+', s.upper()):
-            raise ValueError("Only A,C,G,T allowed")
+    @classmethod
+    def is_valid_sequence(cls, sequence: str) -> bool:
+        """Проверяет, является ли последовательность валидной ДНК"""
+        return cls._valid_bases.issuperset(sequence.upper())
 
     def _encode(self, text: str) -> int:
         x = 0
@@ -65,7 +67,7 @@ class DNAString:
             ## Сдвигаемся вправо, убирая прочитанные биты
             num >>= 2                   # 58₁₀ = 00111010₂ >> 2 = 00001110₂ = 14₁₀
         return ''.join(reversed(s))
-
+    
     def __str__(self) -> str:
         return self.text
 
@@ -98,12 +100,27 @@ class DNAString:
     def __iter__(self) -> Iterator[str]:
         return iter(self.text)
 
-    def __add__(self, other: Union[str, DNAString]) -> DNAString:
+    def __add__(self, other: Union[int, str, DNAString]) -> DNAString:
+        if isinstance(other, int):
+            new_num = self.num + other
+            new_len = max(self.len, self._min_length_for_number(new_num))
+            return DNAString(new_num, new_len)
+        
         if isinstance(other, DNAString):
             s2 = other.text
         else:
             s2 = other.upper()
+            
         return DNAString(self.text + s2)
+
+    @staticmethod
+    def _min_length_for_number(num: int) -> int:
+        """Возвращает минимальную длину ДНК строки для представления числа"""
+        if num == 0:
+            return 1
+        
+        import math
+        return math.ceil(num.bit_length() / 2) # 2 бита на нуклеотид
 
     def __mul__(self, n: int) -> DNAString:
         if n < 0:
