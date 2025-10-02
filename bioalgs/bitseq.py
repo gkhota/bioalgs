@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Union, Iterator, overload, List, Set
+from typing import Union, Iterator, overload, List, Set, Optional
 import re
 
 class DNAString:
@@ -7,19 +7,29 @@ class DNAString:
     inv: dict[int, str]  = {v: k for k, v in code.items()}
     alphalen: int        = len(code)
 
-    def __init__(self, init_value: object) -> None:
+    def __init__(self, init_value: object, length: Optional[int] = None) -> None:
         if isinstance(init_value, str):
             self._validate_dna_string(init_value)
             self.text: str = init_value.upper()
-            self.num:  int = self._encode(self.text)
+            self.len: int = len(self.text)
+            self.num: int = self._encode(self.text)
+            
+            # Проверяем соответствие переданной длины
+            if length is not None and length != self.len:
+                raise ValueError(f"String length {self.len} doesn't match specified length {length}")
+                
         elif isinstance(init_value, int):
             if init_value < 0:
                 raise ValueError("Integer must be non-negative")
+            if length is None:
+                raise ValueError("Length must be specified when creating from integer")
+            
             self.num = init_value
-            self.text = self._decode(self.num)
+            self.len = length
+            self.text = self._decode(self.num, self.len)
+            
         else:
             raise TypeError("Argument must be str or int")
-        self.len: int = len(self.text)
 
     @staticmethod
     def _validate_dna_string(s: str) -> None:
@@ -32,14 +42,28 @@ class DNAString:
             x = (x << 2) | self.code[ch]
         return x
 
-    def _decode(self, num: int) -> str:
-        if num == 0:
-            return 'A'
+    def _decode(self, num: int, k: int) -> str:
+        """
+        Декодирует число в ДНК-строку заданной длины k.
+        
+        Args:
+            num: Закодированное число
+            k: Длина результирующей строки
+        
+        Returns:
+            ДНК-строка длины k
+        """
+        if k == 0:
+            return ''
+        
         s: list[str] = []
-        x = num
-        while x:
-            s.append(self.inv[x & 3])
-            x >>= 2
+        
+        # Извлекаем ровно k символов (справа налево) и переворачиваем
+        for _ in range(k):
+            ## Забираем два крайних бита и смотрим, что это за буква в словаре
+            s.append(self.inv[num & 3]) # 3₁₀ == 11₂ 
+            ## Сдвигаемся вправо, убирая прочитанные биты
+            num >>= 2                   # 58₁₀ = 00111010₂ >> 2 = 00001110₂ = 14₁₀
         return ''.join(reversed(s))
 
     def __str__(self) -> str:
@@ -145,19 +169,85 @@ class DNAString:
         # Подсчитываем количество единиц в результате XOR
         # return bin(xor_result).count('1') // 2
         return (self.num ^ other.num).bit_count() // 2
+    
+    def kmergen_nums(self, k: int) -> Iterator[int]:
+        """
+        Генерирует закодированные k-меры как числа (быстрее для алгоритмов).
+        """
+        if k <= 0 or k > self.len:
+            return
+        
+        mask = (1 << (2 * k)) - 1
+        shift_amount = 2 * (self.len - k)
+        
+        for _ in range(self.len - k + 1):
+            yield (self.num >> shift_amount) & mask
+            shift_amount -= 2
 
+    def kmergen(self, k: int) -> Iterator[DNAString]:
+        """
+        Основной метод генерации k-меров, использующий kmergen_nums(...) для эффективности.
+        """
+        for kmer_num in self.kmergen_nums(k):
+            yield DNAString(kmer_num, k)
+    #
+    # Ниже разные версии kmergen -- можно удалить после обкатки нового варианта
+    # или откатиться
+    #
+    # def kmergen(self, k: int) -> Set[DNAString]:
+    #     return set(
+    #         map(DNAString, {self.text[i:i+k] for i in range(len(self.text)-k+1)}))
+
+    # def kmergen(self, k: int) -> Iterator[DNAString]:
+    #     """
+    #     Генерирует все k-меры данной ДНК последовательности используя битовые операции.
+        
+    #     Args:
+    #     k: Длина k-мера
+        
+    #     Yields:
+    #         DNAString: k-мер в виде объекта DNAString
+            
+    #     Raises:
+    #         ValueError: Если k больше длины последовательности или k <= 0
+    #     """
+    #     # Валидация входных данных
+    #     if k <= 0:
+    #         raise ValueError("k must be positive")
+    #     if k > self.len:
+    #         raise ValueError(f"k ({k}) cannot be greater than sequence length ({self.len})")
+        
+    #     # Создаём маску для извлечения подпоследовательности длины k
+    #     mask = (1 << (2 * k)) - 1
+        
+    #     # Генерируем все k-меры
+    #     for pos in range(self.len - k + 1):
+    #         shift_amount = 2 * (self.len - k - pos)
+    #         current_window = (self.num >> shift_amount) & mask
+    #         yield DNAString(current_window, k)  # Передаём длину!
+
+    #     # Создаём маску для извлечения подпоследовательности длины motif_len
+    #     mask = (1 << (2 * k)) - 1 # 1 x 2*k 
+        
+    #     # Извлекаем первое окно (начиная с позиции 0)
+    #     shift_amount = 2 * (self.len - k)
+    #     current_window = (self.num >> shift_amount) & mask
+        
+    #     yield DNAString(current_window)
+        
+    #     # Сдвигаем окно по всей последовательности
+    #     for _ in range(1, self.len - k + 1):
+    #         # Сдвигаем окно на одну позицию вправо
+    #         shift_amount -= 2
+    #         current_window = (self.num >> shift_amount) & mask
+    #         yield DNAString(current_window)
 
     def find_motif(self, motif: Union[str, DNAString]) -> List[int]:
         """
-        Находит все позиции мотива используя битовые операции и скользящее окно.
-        
-        Алгоритм:
-        1. Кодируем мотив в число
-        2. Создаём маску для извлечения подпоследовательности нужной длины
-        3. Сдвигаем окно по основной последовательности, сравнивая с мотивом
+        Находит все позиции мотива в последовательности.
+        Использует kmergen для генерации окон.
         """
         if isinstance(motif, DNAString):
-            motif_text = motif.text
             motif_num = motif.num
             motif_len = motif.len
         else:
@@ -170,28 +260,18 @@ class DNAString:
         
         positions: List[int] = []
         
-        # Создаём маску для извлечения подпоследовательности длины motif_len
-        mask = (1 << (2 * motif_len)) - 1 # 1 x 2*motif_len 
-        
-        # Извлекаем первое окно (начиная с позиции 0)
-        shift_amount = 2 * (self.len - motif_len)
-        current_window = (self.num >> shift_amount) & mask
-        
-        # Проверяем первую позицию
-        if current_window == motif_num:
-            positions.append(0)
-        
-        # Сдвигаем окно по всей последовательности
-        for pos in range(1, self.len - motif_len + 1):
-            # Сдвигаем окно на одну позицию вправо
-            shift_amount -= 2
-            current_window = (self.num >> shift_amount) & mask
-            
-            if current_window == motif_num:
-                positions.append(pos)
+        # Используем kmergen_nums (если реализован) для скорости
+        if hasattr(self, 'kmergen_nums'):
+            for pos, kmer_num in enumerate(self.kmergen_nums(motif_len)):
+                if kmer_num == motif_num:
+                    positions.append(pos)
+        else:
+            # Fallback на обычный kmergen
+            for pos, kmer in enumerate(self.kmergen(motif_len)):
+                if kmer.num == motif_num:
+                    positions.append(pos)
         
         return positions
-
 
     def neighbors(self, d: int) -> Set[DNAString]:
         encoded = self._get_encoded_neighbors(d)
@@ -213,3 +293,5 @@ class DNAString:
                         next_set.add(new)
             current |= next_set
         return current
+    
+    

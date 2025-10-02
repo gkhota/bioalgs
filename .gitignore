@@ -40,3 +40,4 @@ ENV/
 
 # custom
 .ignore.py
+.ignore.txt
