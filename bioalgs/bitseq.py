@@ -172,10 +172,6 @@ class DNAString:
     def hamming_distance(self, other: DNAString) -> int:
         """
         Вычисляет расстояние Хэмминга через битовые операции.
-        
-        Алгоритм:
-        1. XOR двух закодированных чисел выделяет различающиеся биты
-        2. Подсчёт единиц в результате XOR даёт количество различающихся нуклеотидов
         """
         if self.len != other.len:
             raise ValueError("Lengths must match")
@@ -185,7 +181,18 @@ class DNAString:
         
         # Подсчитываем количество единиц в результате XOR
         # return bin(xor_result).count('1') // 2
-        return (self.num ^ other.num).bit_count() // 2
+        
+        xor_result = self.num ^ other.num
+        distance = 0
+        
+        # Проверяем каждые 2 бита отдельно
+        for _ in range(self.len):
+            # Если любой из 2 битов нуклеотида отличается
+            if xor_result & 3:  # 3 = 11₂
+                distance += 1
+            xor_result >>= 2
+        
+        return distance
     
     def kmergen_nums(self, k: int) -> Iterator[int]:
         """
@@ -292,7 +299,7 @@ class DNAString:
 
     def neighbors(self, d: int) -> Set[DNAString]:
         encoded = self._get_encoded_neighbors(d)
-        return {DNAString(n) for n in encoded}
+        return {DNAString(n, self.len) for n in encoded}
 
     def _get_encoded_neighbors(self, d: int) -> Set[int]:
         current: Set[int] = {self.num}
